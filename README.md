@@ -1,3 +1,3 @@
 # AutonomousCar
 
-![](/results/obs_detect.gif)
+![](results/obs_detect.gif)
