@@ -1,0 +1,7 @@
+/media/pi/PiDrive1/Holistic2/master/src/imu/CMakeFiles/install/local.dir
+/media/pi/PiDrive1/Holistic2/master/src/imu/CMakeFiles/install.dir
+/media/pi/PiDrive1/Holistic2/master/src/imu/CMakeFiles/install/strip.dir
+/media/pi/PiDrive1/Holistic2/master/src/imu/CMakeFiles/edit_cache.dir
+/media/pi/PiDrive1/Holistic2/master/src/imu/CMakeFiles/rebuild_cache.dir
+/media/pi/PiDrive1/Holistic2/master/src/imu/CMakeFiles/RTIMULibDrive.dir
+/media/pi/PiDrive1/Holistic2/master/src/imu/CMakeFiles/list_install_components.dir

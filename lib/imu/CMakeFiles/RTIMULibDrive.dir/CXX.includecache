@@ -1,0 +1,12 @@
+#IncludeRegexLine: ^[ 	]*#[ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/media/pi/PiDrive1/Holistic2/master/src/imu/RTIMULibDrive.cpp
+RTIMULib.h
+/media/pi/PiDrive1/Holistic2/master/src/imu/RTIMULib.h
+

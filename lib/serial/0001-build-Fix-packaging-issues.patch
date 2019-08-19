@@ -1,0 +1,230 @@
+From 2c5d0065cc717d1740e1bf332b4557d314cbc4de Mon Sep 17 00:00:00 2001
+From: Alec Leamas <leamas.alec@gmail.com>
+Date: Fri, 28 Dec 2018 04:53:52 -0500
+Subject: [PATCH] build: Fix packaging issues.
+
+---
+ CMakeLists.txt                   | 105 +++++++++++++++++--------------
+ cxx-serial.pc.in                 |  12 ++++
+ tests/CMakeLists.txt             |  37 ++++++++---
+ package.xml => tests/package.xml |   2 +-
+ 4 files changed, 98 insertions(+), 58 deletions(-)
+ create mode 100644 cxx-serial.pc.in
+ rename package.xml => tests/package.xml (96%)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index a72acb8..695d403 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -1,39 +1,32 @@
+-cmake_minimum_required(VERSION 2.8.3)
+-project(serial)
++cmake_minimum_required(VERSION 3.9)
+ 
+-# Find catkin
+-find_package(catkin REQUIRED)
++# General setup
++set(PROJ_SOVERSION 1)
++project(cxx-serial
++    VERSION 1.2.1
++    DESCRIPTION "Cross-platform, Serial Port library written in C++"
++    HOMEPAGE_URL "http://wjwwood.io/serial/"
++)
++include(GNUInstallDirs)
+ 
+-if(APPLE)
+-	find_library(IOKIT_LIBRARY IOKit)
+-	find_library(FOUNDATION_LIBRARY Foundation)
+-endif()
++# Public options and command line configuration
++set(PKGCONFIGDIR ${CMAKE_INSTALL_DATAROOTDIR}/pkgconfig
++    CACHE STRING "Location for .pc file"
++)
++option(CATKIN_ENABLE_TESTING "Enable catkin unit tests" ON)
++option(ENABLE_TEST_PROGRAM "Build test program" OFF)
+ 
+-if(UNIX AND NOT APPLE)
+-    # If Linux, add rt and pthread
+-    catkin_package(
+-        LIBRARIES ${PROJECT_NAME}
+-        INCLUDE_DIRS include
+-        DEPENDS rt pthread
+-    )
+-else()
+-    # Otherwise normal call
+-    catkin_package(
+-        LIBRARIES ${PROJECT_NAME}
+-        INCLUDE_DIRS include
+-    )
+-endif()
+ 
+-## Sources
++# main library: file lists:
+ set(serial_SRCS
+     src/serial.cc
+     include/serial/serial.h
+     include/serial/v8stdint.h
+ )
+ if(APPLE)
+-	# If OSX
+-	list(APPEND serial_SRCS src/impl/unix.cc)
+-	list(APPEND serial_SRCS src/impl/list_ports/list_ports_osx.cc)
++    # If OSX
++    list(APPEND serial_SRCS src/impl/unix.cc)
++    list(APPEND serial_SRCS src/impl/list_ports/list_ports_osx.cc)
+ elseif(UNIX)
+     # If unix
+     list(APPEND serial_SRCS src/impl/unix.cc)
+@@ -44,35 +37,51 @@ else()
+     list(APPEND serial_SRCS src/impl/list_ports/list_ports_win.cc)
+ endif()
+ 
+-## Add serial library
+-add_library(${PROJECT_NAME} ${serial_SRCS})
++set(serial_HEADERS
++    include/serial/serial.h
++    include/serial/v8stdint.h
++)
++
++
++# Build, link and install main library
++add_library(${PROJECT_NAME} SHARED ${serial_SRCS})
++set_target_properties(${PROJECT_NAME} PROPERTIES
++    VERSION ${PROJECT_VERSION}
++    SOVERSION ${PROJ_SOVERSION}
++    PUBLIC_HEADER "${serial_HEADERS}"
++)
++target_include_directories(${PROJECT_NAME} PRIVATE include)
+ if(APPLE)
+-	target_link_libraries(${PROJECT_NAME} ${FOUNDATION_LIBRARY} ${IOKIT_LIBRARY})
++    find_library(IOKIT_LIB IOKit)
++    find_library(FOUNDATION_LIB Foundation)
++    target_link_libraries(${PROJECT_NAME} ${FOUNDATION_LIB} ${IOKIT_LIB})
+ elseif(UNIX)
+-	target_link_libraries(${PROJECT_NAME} rt pthread)
++    set(rt_LIBRARIES rt)
++    set(pthread_LIBRARIES pthread)
++    target_link_libraries(${PROJECT_NAME} rt pthread)
+ else()
+-	target_link_libraries(${PROJECT_NAME} setupapi)
++    target_link_libraries(${PROJECT_NAME} setupapi)
+ endif()
+ 
+-## Uncomment for example
+-add_executable(serial_example examples/serial_example.cc)
+-add_dependencies(serial_example ${PROJECT_NAME})
+-target_link_libraries(serial_example ${PROJECT_NAME})
+-
+-## Include headers
+-include_directories(include)
+-
+-## Install executable
+ install(TARGETS ${PROJECT_NAME}
+-    ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+-    LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
++    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
++    PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+ )
++install(FILES examples/serial_example.cc DESTINATION ${CMAKE_INSTALL_DOCDIR})
+ 
+-## Install headers
+-install(FILES include/serial/serial.h include/serial/v8stdint.h
+-  DESTINATION ${CATKIN_GLOBAL_INCLUDE_DESTINATION}/serial)
+ 
+-## Tests
+-if(CATKIN_ENABLE_TESTING)
+-    add_subdirectory(tests)
++# Other targets: test program, pkg-config and tests.
++if (ENABLE_TEST_PROGRAM)
++    add_executable(serial_example examples/serial_example.cc)
++    add_dependencies(serial_example ${PROJECT_NAME})
++    target_link_libraries(serial_example ${PROJECT_NAME})
+ endif()
++
++configure_file(cxx-serial.pc.in cxx-serial.pc @ONLY)
++install(FILES ${CMAKE_BINARY_DIR}/cxx-serial.pc 
++    DESTINATION ${PKGCONFIGDIR}
++)
++
++if (CATKIN_ENABLE_TESTING)
++    add_subdirectory(tests)
++endif ()
+diff --git a/cxx-serial.pc.in b/cxx-serial.pc.in
+new file mode 100644
+index 0000000..377d975
+--- /dev/null
++++ b/cxx-serial.pc.in
+@@ -0,0 +1,12 @@
++prefix=@CMAKE_INSTALL_PREFIX@
++exec_prefix=@CMAKE_INSTALL_PREFIX@
++libdir=${exec_prefix}/@CMAKE_INSTALL_LIBDIR@
++includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
++
++Name: @PROJECT_NAME@
++Description: @PROJECT_DESCRIPTION@
++Version: @PROJECT_VERSION@
++
++Requires:
++Libs: -L${libdir} -lcxx-serial
++Cflags: -I${includedir}
+diff --git a/tests/CMakeLists.txt b/tests/CMakeLists.txt
+index 38718e6..c1429bf 100644
+--- a/tests/CMakeLists.txt
++++ b/tests/CMakeLists.txt
+@@ -1,10 +1,29 @@
+-if(UNIX)
+-    catkin_add_gtest(${PROJECT_NAME}-test unix_serial_tests.cc)
+-    target_link_libraries(${PROJECT_NAME}-test ${PROJECT_NAME} ${Boost_LIBRARIES})
+-    if(NOT APPLE)
+-        target_link_libraries(${PROJECT_NAME}-test util)
+-    endif()
+-
+-    catkin_add_gtest(${PROJECT_NAME}-test-timer unit/unix_timer_tests.cc)
+-    target_link_libraries(${PROJECT_NAME}-test-timer ${PROJECT_NAME})
++if (NOT UNIX)
++    message(FATAL_ERROR, "CATKIN_TESTING is only available on UNIX/MacOS")
+ endif()
++
++find_package(catkin REQUIRED)
++
++if (APPLE)
++    catkin_package(
++        LIBRARIES ${PROJECT_NAME}
++        INCLUDE_DIRS include
++    )
++else()
++    catkin_package(
++        LIBRARIES ${PROJECT_NAME}
++        INCLUDE_DIRS ../include
++        DEPENDS rt pthread
++    )
++endif()
++
++catkin_add_gtest(${PROJECT_NAME}-test unix_serial_tests.cc)
++target_include_directories(${PROJECT_NAME}-test PRIVATE ../include)
++target_link_libraries(${PROJECT_NAME}-test ${PROJECT_NAME} ${Boost_LIBRARIES} pthread)
++if(NOT APPLE)
++     target_link_libraries(${PROJECT_NAME}-test util)
++endif()
++
++catkin_add_gtest(${PROJECT_NAME}-test-timer unit/unix_timer_tests.cc)
++target_include_directories(${PROJECT_NAME}-test-timer PRIVATE ../include)
++target_link_libraries(${PROJECT_NAME}-test-timer ${PROJECT_NAME} pthread)
+diff --git a/package.xml b/tests/package.xml
+similarity index 96%
+rename from package.xml
+rename to tests/package.xml
+index 70c2bb9..0d0a9f9 100644
+--- a/package.xml
++++ b/tests/package.xml
+@@ -1,6 +1,6 @@
+ <?xml version="1.0"?>
+ <package>
+-  <name>serial</name>
++  <name>cxx-serial</name>
+   <version>1.2.1</version>
+   <description>
+     Serial is a cross-platform, simple to use library for using serial ports on computers.  This library provides a C++, object oriented interface for interacting with RS-232 like devices on Linux and Windows.
+-- 
+2.20.0
+
